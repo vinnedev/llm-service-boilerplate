@@ -1,0 +1,689 @@
+{% extends "base.html" %}
+
+{% block title %}Chat - LLM{% endblock %}
+
+{% block body %}
+<div class="h-full flex flex-col lg:flex-row">
+    <!-- Sidebar - Sessions -->
+    <aside id="sidebar" class="w-full lg:w-80 bg-gray-900 text-white flex flex-col 
+                               transform transition-transform duration-300 ease-in-out
+                               fixed lg:relative inset-y-0 left-0 z-40 lg:z-auto
+                               -translate-x-full lg:translate-x-0" id="sessions-sidebar">
+        <!-- Header -->
+        <div class="p-4 border-b border-gray-700">
+            <div class="flex items-center justify-between">
+                <h1 class="text-xl font-bold flex items-center gap-2">
+                    <svg class="h-6 w-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                    </svg>
+                    LLM Chat
+                </h1>
+                <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded hover:bg-gray-800">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- New Chat Button -->
+            <button onclick="createNewSession()" class="mt-4 w-full py-2 px-4 border border-gray-600 rounded-lg 
+                           hover:bg-gray-800 transition-colors flex items-center justify-center gap-2">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Nova Conversa
+            </button>
+        </div>
+
+        <!-- Sessions List -->
+        <div class="flex-1 overflow-y-auto p-2" id="sessions-list">
+            {% for session in sessions %}
+            <div class="session-item group p-3 rounded-lg cursor-pointer mb-1 
+                        {% if session.session_id == current_session_id %}bg-gray-700{% else %}hover:bg-gray-800{% endif %}"
+                onclick="selectSession('{{ session.session_id }}')" data-session-id="{{ session.session_id }}"
+                data-session-name="{{ session.name }}">
+                <div class="flex items-center justify-between">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium truncate session-name">{{ session.name }}</p>
+                        <p class="text-xs text-gray-400">{{ session.updated_at.strftime('%d/%m/%Y %H:%M') }}</p>
+                    </div>
+                    <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <!-- Rename Button -->
+                        <button
+                            onclick="event.stopPropagation(); renameSession('{{ session.session_id }}', '{{ session.name }}')"
+                            class="p-1 rounded hover:bg-gray-600" title="Renomear">
+                            <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                        </button>
+                        <!-- Delete Button -->
+                        <button onclick="event.stopPropagation(); deleteSession('{{ session.session_id }}')"
+                            class="p-1 rounded hover:bg-gray-600" title="Excluir">
+                            <svg class="h-4 w-4 text-gray-400 hover:text-red-400" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="text-center text-gray-400 py-8">
+                <p class="text-sm">Nenhuma conversa ainda</p>
+                <p class="text-xs mt-1">Clique em "Nova Conversa" para começar</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- User Info -->
+        <div class="p-4 border-t border-gray-700">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="h-8 w-8 bg-primary-600 rounded-full flex items-center justify-center">
+                        <span class="text-sm font-medium">{{ user.name[0].upper() }}</span>
+                    </div>
+                    <div class="text-sm">
+                        <p class="font-medium">{{ user.name }}</p>
+                        <p class="text-xs text-gray-400">{{ user.email }}</p>
+                    </div>
+                </div>
+                <a href="/web/auth/logout" class="p-2 rounded hover:bg-gray-800 transition-colors" title="Sair">
+                    <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Overlay for mobile -->
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden hidden"
+        onclick="toggleSidebar()"></div>
+
+    <!-- Main Chat Area -->
+    <main class="flex-1 flex flex-col h-full bg-white">
+        <!-- Chat Header -->
+        <header class="bg-white border-b px-4 py-3 flex items-center justify-between shadow-sm">
+            <div class="flex items-center gap-3">
+                <button onclick="toggleSidebar()" class="lg:hidden p-2 -ml-2 rounded hover:bg-gray-100">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
+                <div>
+                    <h2 class="font-semibold text-gray-900" id="chat-title">
+                        {% if current_session %}{{ current_session.name }}{% else %}Selecione uma conversa{% endif %}
+                    </h2>
+                    <p class="text-xs text-gray-500" id="chat-subtitle">
+                        {% if current_session %}Sessão ativa{% else %}Ou crie uma nova{% endif %}
+                    </p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Messages Area -->
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 chat-messages">
+            {% if current_session %}
+            <!-- Messages will be loaded here -->
+            <div id="messages-container">
+                {% for msg in messages %}
+                <div
+                    class="flex {% if msg.role == 'user' %}justify-end{% else %}justify-start{% endif %} message-enter">
+                    <div class="max-w-[80%] lg:max-w-[60%]">
+                        <div
+                            class="{% if msg.role == 'user' %}bg-primary-600 text-white user-message{% else %}bg-gray-100 text-gray-900{% endif %} rounded-2xl px-4 py-3">
+                            {% if msg.role == 'user' %}
+                            <div class="text-sm markdown-content">{{ msg.content }}</div>
+                            {% else %}
+                            <div class="text-sm markdown-content markdown-to-render">{{ msg.content }}</div>
+                            {% endif %}
+                        </div>
+                        <div
+                            class="flex {% if msg.role == 'user' %}justify-end{% else %}justify-start{% endif %} mt-1 px-1">
+                            <span class="text-xs text-gray-400">
+                                {% if msg.role == 'user' %}Você{% else %}Assistente{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Typing Indicator (hidden by default) -->
+            <div id="typing-indicator" class="hidden flex justify-start">
+                <div class="bg-gray-100 rounded-2xl px-4 py-3">
+                    <div class="typing-indicator flex gap-1">
+                        <span class="h-2 w-2 bg-gray-400 rounded-full"></span>
+                        <span class="h-2 w-2 bg-gray-400 rounded-full"></span>
+                        <span class="h-2 w-2 bg-gray-400 rounded-full"></span>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <!-- Empty State -->
+            <div id="empty-state" class="flex-1 flex items-center justify-center h-full">
+                <div class="text-center">
+                    <div class="mx-auto h-16 w-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                        <svg class="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-900">Comece uma conversa</h3>
+                    <p class="text-sm text-gray-500 mt-1">Digite sua mensagem abaixo para iniciar</p>
+                </div>
+            </div>
+
+            <!-- Messages container (hidden initially, shown after first message) -->
+            <div id="messages-container" class="hidden"></div>
+
+            <!-- Typing Indicator (hidden by default) -->
+            <div id="typing-indicator" class="hidden flex justify-start">
+                <div class="bg-gray-100 rounded-2xl px-4 py-3">
+                    <div class="typing-indicator flex gap-1">
+                        <span class="h-2 w-2 bg-gray-400 rounded-full"></span>
+                        <span class="h-2 w-2 bg-gray-400 rounded-full"></span>
+                        <span class="h-2 w-2 bg-gray-400 rounded-full"></span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Message Input -->
+        <div class="border-t bg-white p-4">
+            <form id="message-form" onsubmit="sendMessage(event)" class="flex gap-3">
+                <input type="text" id="message-input" placeholder="Digite sua mensagem..." class="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:outline-none 
+                              focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                <button type="submit" id="send-button" class="px-6 py-3 bg-primary-600 text-white rounded-xl hover:bg-primary-700 
+                               focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 
+                               transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                </button>
+            </form>
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Current session state
+    let currentSessionId = '{{ current_session_id or "" }}';
+    let isStreaming = false;
+
+    // Toggle sidebar on mobile
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
+
+        sidebar.classList.toggle('-translate-x-full');
+        overlay.classList.toggle('hidden');
+    }
+
+    // Create new session
+    async function createNewSession() {
+        try {
+            const response = await fetch('/web/chat/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                window.location.href = `/web/chat?session_id=${data.session_id}`;
+            } else {
+                console.error('Failed to create session');
+            }
+        } catch (error) {
+            console.error('Error creating session:', error);
+        }
+    }
+
+    // Select session (dynamic loading without page reload)
+    async function selectSession(sessionId) {
+        if (sessionId === currentSessionId) return;
+        if (isStreaming) return; // Don't switch during streaming
+
+        try {
+            // Show loading state
+            const messagesContainer = document.getElementById('messages-container');
+            const emptyState = document.getElementById('empty-state');
+
+            // Fetch session messages
+            const response = await fetch(`/web/chat/session/${sessionId}/messages`);
+            if (!response.ok) throw new Error('Failed to load session');
+
+            const data = await response.json();
+
+            // Update current session
+            currentSessionId = sessionId;
+
+            // Update URL without reload
+            window.history.pushState({}, '', `/web/chat?session_id=${sessionId}`);
+
+            // Update header
+            document.getElementById('chat-title').textContent = data.name;
+            document.getElementById('chat-subtitle').textContent = 'Sessão ativa';
+
+            // Update sidebar highlighting
+            document.querySelectorAll('.session-item').forEach(el => {
+                if (el.getAttribute('data-session-id') === sessionId) {
+                    el.classList.remove('hover:bg-gray-800');
+                    el.classList.add('bg-gray-700');
+                } else {
+                    el.classList.remove('bg-gray-700');
+                    el.classList.add('hover:bg-gray-800');
+                }
+            });
+
+            // Hide empty state if visible
+            if (emptyState) emptyState.classList.add('hidden');
+
+            // Show and clear messages container
+            if (messagesContainer) {
+                messagesContainer.classList.remove('hidden');
+                messagesContainer.innerHTML = '';
+            }
+
+            // Render messages
+            data.messages.forEach(msg => {
+                addMessage(msg.role, msg.content);
+            });
+
+            // Show typing indicator container (hidden)
+            const typingIndicator = document.getElementById('typing-indicator');
+            if (typingIndicator) typingIndicator.classList.add('hidden');
+
+            // Scroll to bottom
+            scrollToBottom();
+
+            // Focus input
+            document.getElementById('message-input').focus();
+
+            // Close mobile sidebar
+            const sidebar = document.getElementById('sidebar');
+            if (window.innerWidth < 1024 && !sidebar.classList.contains('-translate-x-full')) {
+                toggleSidebar();
+            }
+
+        } catch (error) {
+            console.error('Error loading session:', error);
+            // Fallback to page reload
+            window.location.href = `/web/chat?session_id=${sessionId}`;
+        }
+    }
+
+    // Add session to sidebar dynamically
+    function addSessionToSidebar(session) {
+        const sessionsList = document.getElementById('sessions-list');
+
+        // Remove "no sessions" message if exists
+        const emptyMessage = sessionsList.querySelector('.text-center.text-gray-400');
+        if (emptyMessage) emptyMessage.remove();
+
+        // Create new session element
+        const sessionElement = document.createElement('div');
+        sessionElement.className = 'session-item group p-3 rounded-lg cursor-pointer mb-1 bg-gray-700';
+        sessionElement.setAttribute('data-session-id', session.session_id);
+        sessionElement.setAttribute('data-session-name', session.name);
+        sessionElement.onclick = () => selectSession(session.session_id);
+
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+        sessionElement.innerHTML = `
+            <div class="flex items-center justify-between">
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium truncate session-name">${session.name}</p>
+                    <p class="text-xs text-gray-400">${dateStr}</p>
+                </div>
+                <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onclick="event.stopPropagation(); renameSession('${session.session_id}', '${session.name}')"
+                            class="p-1 rounded hover:bg-gray-600" title="Renomear">
+                        <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                        </svg>
+                    </button>
+                    <button onclick="event.stopPropagation(); deleteSession('${session.session_id}')"
+                            class="p-1 rounded hover:bg-gray-600" title="Excluir">
+                        <svg class="h-4 w-4 text-gray-400 hover:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        `;
+
+        // Remove highlight from other sessions
+        sessionsList.querySelectorAll('.session-item').forEach(el => {
+            el.classList.remove('bg-gray-700');
+            el.classList.add('hover:bg-gray-800');
+        });
+
+        // Insert at top of list
+        sessionsList.insertBefore(sessionElement, sessionsList.firstChild);
+    }
+
+    // Delete session
+    async function deleteSession(sessionId) {
+        if (!confirm('Tem certeza que deseja excluir esta conversa? Todas as mensagens serão perdidas.')) return;
+
+        try {
+            const response = await fetch(`/web/chat/session/${sessionId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                if (sessionId === currentSessionId) {
+                    window.location.href = '/web/chat';
+                } else {
+                    document.querySelector(`[data-session-id="${sessionId}"]`).remove();
+                }
+            } else {
+                alert('Erro ao excluir conversa');
+            }
+        } catch (error) {
+            console.error('Error deleting session:', error);
+            alert('Erro ao excluir conversa');
+        }
+    }
+
+    // Rename session
+    async function renameSession(sessionId, currentName) {
+        const newName = prompt('Digite o novo nome para a conversa:', currentName);
+        if (!newName || newName.trim() === '' || newName === currentName) return;
+
+        try {
+            const response = await fetch(`/web/chat/session/${sessionId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName.trim() })
+            });
+
+            if (response.ok) {
+                // Update session name in sidebar
+                const sessionElement = document.querySelector(`[data-session-id="${sessionId}"]`);
+                if (sessionElement) {
+                    sessionElement.querySelector('.session-name').textContent = newName.trim();
+                    sessionElement.setAttribute('data-session-name', newName.trim());
+                }
+
+                // Update header if current session
+                if (sessionId === currentSessionId) {
+                    document.getElementById('chat-title').textContent = newName.trim();
+                }
+            } else {
+                alert('Erro ao renomear conversa');
+            }
+        } catch (error) {
+            console.error('Error renaming session:', error);
+            alert('Erro ao renomear conversa');
+        }
+    }
+
+    // Send message with SSE streaming
+    async function sendMessage(event) {
+        event.preventDefault();
+
+        if (isStreaming) return;
+
+        const input = document.getElementById('message-input');
+        const message = input.value.trim();
+
+        if (!message) return;
+
+        // If no session, create one first
+        if (!currentSessionId) {
+            try {
+                const response = await fetch('/web/chat/session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    currentSessionId = data.session_id;
+
+                    // Hide empty state, show messages container
+                    const emptyState = document.getElementById('empty-state');
+                    if (emptyState) emptyState.classList.add('hidden');
+
+                    const messagesContainer = document.getElementById('messages-container');
+                    if (messagesContainer) messagesContainer.classList.remove('hidden');
+
+                    // Update header
+                    document.getElementById('chat-title').textContent = data.name;
+                    document.getElementById('chat-subtitle').textContent = 'Sessão ativa';
+
+                    // Add new session to sidebar
+                    addSessionToSidebar(data);
+
+                    // Update URL without reload
+                    window.history.pushState({}, '', `/web/chat?session_id=${data.session_id}`);
+                } else {
+                    console.error('Failed to create session');
+                    return;
+                }
+            } catch (error) {
+                console.error('Error creating session:', error);
+                return;
+            }
+        }
+
+        // Clear input and disable
+        input.value = '';
+        isStreaming = true;
+        document.getElementById('send-button').disabled = true;
+
+        // Add user message to chat
+        addMessage('user', message);
+
+        // Show typing indicator
+        document.getElementById('typing-indicator').classList.remove('hidden');
+
+        // Scroll to bottom
+        scrollToBottom();
+
+        try {
+            // Send request and get SSE stream
+            const response = await fetch(`/web/chat/send/${currentSessionId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: message })
+            });
+
+            if (!response.ok) throw new Error('Request failed');
+
+            // Hide typing indicator
+            document.getElementById('typing-indicator').classList.add('hidden');
+
+            // Create assistant message container
+            const assistantMsgId = addMessage('assistant', '', true);
+
+            // Read the stream
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let fullResponse = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data:')) {
+                        try {
+                            const jsonStr = line.slice(5).trim();
+                            if (!jsonStr) continue;
+
+                            const data = JSON.parse(jsonStr);
+
+                            if (data.chunk) {
+                                fullResponse += data.chunk;
+                                updateMessage(assistantMsgId, fullResponse);
+                                scrollToBottom();
+                            }
+
+                            if (data.done) {
+                                console.log('Streaming complete');
+                            }
+
+                            if (data.error) {
+                                console.error('Error:', data.error);
+                                updateMessage(assistantMsgId, 'Erro: ' + data.error);
+                            }  
+                        } catch (e) {
+                            // Ignore parse errors for incomplete chunks
+                        }
+                    }
+                }
+            }
+
+        } catch (error) {
+            console.error('Error sending message:', error);
+            document.getElementById('typing-indicator').classList.add('hidden');
+            addMessage('assistant', 'Desculpe, ocorreu um erro. Por favor, tente novamente.');
+        } finally {
+            isStreaming = false;
+            document.getElementById('send-button').disabled = false;
+            input.focus();
+        }
+    }
+
+    // Add message to chat
+    function addMessage(role, content, returnId = false) {
+        const container = document.getElementById('messages-container');
+        const id = 'msg-' + Date.now();
+
+        const isUser = role === 'user';
+        const userClass = isUser ? 'user-message' : '';
+        const timeStr = formatTime(new Date());
+        const roleLabel = isUser ? 'Você' : 'Assistente';
+
+        const html = `
+            <div id="${id}" class="flex ${isUser ? 'justify-end' : 'justify-start'} message-enter">
+                <div class="max-w-[80%] lg:max-w-[60%]">
+                    <div class="${isUser ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-900'} rounded-2xl px-4 py-3 ${userClass}">
+                        <div class="text-sm markdown-content">${isUser ? escapeHtml(content) : renderMarkdown(content)}</div>
+                    </div>
+                    <div class="flex ${isUser ? 'justify-end' : 'justify-start'} mt-1 px-1 gap-2">
+                        <span class="text-xs text-gray-400">${roleLabel}</span>
+                        <span class="text-xs text-gray-400">•</span>
+                        <span class="text-xs text-gray-400 message-time">${timeStr}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.insertAdjacentHTML('beforeend', html);
+
+        // Apply syntax highlighting to code blocks
+        if (!isUser) {
+            const msgEl = document.getElementById(id);
+            msgEl.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        }
+
+        if (returnId) return id;
+    }
+
+    // Update message content (for streaming)
+    function updateMessage(id, content) {
+        const el = document.querySelector(`#${id} .markdown-content`);
+        if (el) {
+            el.innerHTML = renderMarkdown(content);
+            // Apply syntax highlighting
+            el.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        }
+
+        // Update time to current time (streaming complete)
+        const timeEl = document.querySelector(`#${id} .message-time`);
+        if (timeEl) {
+            timeEl.textContent = formatTime(new Date());
+        }
+    }
+
+    // Format time for display
+    function formatTime(date) {
+        return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Render markdown to HTML
+    function renderMarkdown(text) {
+        if (!text) return '';
+
+        // Configure marked
+        marked.setOptions({
+            breaks: true,          // Convert \n to <br>
+            gfm: true,             // GitHub Flavored Markdown
+            headerIds: false,      // Don't add IDs to headers
+            mangle: false,         // Don't escape email addresses
+        });
+
+        return marked.parse(text);
+    }
+
+    // Scroll chat to bottom
+    function scrollToBottom() {
+        const chat = document.getElementById('chat-messages');
+        chat.scrollTop = chat.scrollHeight;
+    }
+
+    // Escape HTML
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+        // Render markdown for messages loaded from server
+        document.querySelectorAll('.markdown-to-render').forEach((el) => {
+            const rawText = el.textContent;
+            el.innerHTML = renderMarkdown(rawText);
+            // Apply syntax highlighting to code blocks
+            el.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        });
+
+        scrollToBottom();
+
+        // Focus input if session active
+        if (currentSessionId) {
+            document.getElementById('message-input').focus();
+        }
+    });
+
+    // Handle browser back/forward navigation
+    window.addEventListener('popstate', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('session_id');
+
+        if (sessionId && sessionId !== currentSessionId) {
+            selectSession(sessionId);
+        } else if (!sessionId && currentSessionId) {
+            // Reload to show empty state
+            window.location.reload();
+        }
+    });
+</script>
+{% endblock %}

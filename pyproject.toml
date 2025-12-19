@@ -1,0 +1,23 @@
+[project]
+name = "llm-service"
+version = "0.1.0"
+description = "Back-end service for LLM"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "email-validator>=2.3.0",
+    "fastapi>=0.125.0",
+    "jinja2>=3.1.6",
+    "langchain>=1.2.0",
+    "langchain-core>=1.2.3",
+    "langchain-mongodb>=0.9.0",
+    "langchain-openai>=1.1.6",
+    "langgraph>=1.0.5",
+    "langgraph-checkpoint-mongodb>=0.3.0",
+    "pydantic-settings>=2.12.0",
+    "pymongo>=4.15.5",
+    "python-dotenv>=1.2.1",
+    "python-multipart>=0.0.21",
+    "sse-starlette>=3.0.4",
+    "uvicorn>=0.38.0",
+]
