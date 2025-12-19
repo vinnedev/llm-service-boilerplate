@@ -106,7 +106,7 @@ flowchart TD
     H --> I[Adiciona sessão na sidebar]
     I --> J[Esconde estado vazio]
     J --> C
-    C --> K[POST /web/chat/send/{session_id}]
+    C --> K["POST /web/chat/send/{session_id}"]
 ```
 
 ## Fluxo de Troca de Sessão (Sem Reload)
@@ -145,7 +145,7 @@ sequenceDiagram
 flowchart TD
     A[Usuário clica em deletar] --> B[Confirmação]
     B -->|Cancela| C[Nada acontece]
-    B -->|Confirma| D[DELETE /web/chat/session/{id}]
+    B -->|Confirma| D["DELETE /web/chat/session/{id}"]
     D --> E[Backend valida ownership]
     E --> F[Deleta checkpoints do LangGraph]
     F --> G[Deleta sessão do MongoDB]
@@ -210,7 +210,7 @@ erDiagram
         string user_id PK
         string email
         string name
-        string password_hash
+        string password
         datetime created_at
         datetime updated_at
     }

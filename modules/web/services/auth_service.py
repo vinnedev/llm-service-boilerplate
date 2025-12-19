@@ -72,7 +72,7 @@ class AuthService:
             "user_id": user_id,
             "name": name.strip(),
             "email": email.lower().strip(),
-            "password_hash": self._hash_password(password),
+            "password": self._hash_password(password),
             "created_at": now,
             "updated_at": now,
         }
@@ -99,7 +99,7 @@ class AuthService:
             logger.warning(f"Login failed - user not found: {email}")
             return None
         
-        if user.get("password_hash") != self._hash_password(password):
+        if user.get("password") != self._hash_password(password):
             logger.warning(f"Login failed - wrong password: {email}")
             return None
         
