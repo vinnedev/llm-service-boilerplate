@@ -147,9 +147,9 @@ async def conversation(
         thread_id = session.thread_id
     else:
         # Create new session
+        from shared.models.sessions_model import SessionCreate
         session_response = session_service.create_session(
-            user_id=request.user_id,
-            name=request.session_name,
+            SessionCreate(user_id=request.user_id, name=request.session_name)
         )
         session_id = session_response.session_id
         thread_id = session_response.thread_id
@@ -185,12 +185,12 @@ async def create_session(
     """Create a new chat session."""
     if not request.user_id.strip():
         raise HTTPException(status_code=400, detail="user_id is required")
-    
+
+    from shared.models.sessions_model import SessionCreate
     session = session_service.create_session(
-        user_id=request.user_id,
-        name=request.name,
+        SessionCreate(user_id=request.user_id, name=request.name)
     )
-    
+
     return session
 
 
