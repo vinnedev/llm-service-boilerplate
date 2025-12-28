@@ -1,11 +1,10 @@
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import MagicMock, AsyncMock
 from httpx import AsyncClient, ASGITransport
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from modules.langchain.services.session_service import SessionService
-from modules.web.services.auth_service import AuthService
 from shared.models.sessions_model import SessionCreate
 
 
@@ -13,7 +12,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 
 @pytest.fixture
-def test_app(sessions_collection):
+def test_app():
     app = FastAPI(title="Test LLM Service")
 
     app.add_middleware(
@@ -34,254 +33,225 @@ def test_app(sessions_collection):
     return app
 
 
-@pytest.fixture
-async def async_client(test_app):
-    transport = ASGITransport(app=test_app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        yield client
-
-
 class TestHealthEndpoint:
     @pytest.mark.asyncio
-    async def test_health_check(self, async_client: AsyncClient):
-        response = await async_client.get("/health")
-
-        assert response.status_code == 200
-        assert response.json()["status"] == "healthy"
+    async def test_health_check(self, test_app: FastAPI):
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/health")
+            assert response.status_code == 200
+            assert response.json()["status"] == "healthy"
 
 
 class TestSessionEndpoints:
-    @pytest.fixture
-    def session_service(self, sessions_collection) -> SessionService:
-        return SessionService(collection=sessions_collection)
-
     @pytest.mark.asyncio
-    async def test_create_session(
-        self,
-        async_client: AsyncClient,
-        sessions_collection,
-    ):
-        with patch(
-            "modules.langchain.http_handlers.conversation.get_session_service"
-        ) as mock_get_service:
-            service = SessionService(collection=sessions_collection)
-            mock_get_service.return_value = service
+    async def test_create_session(self, test_app: FastAPI, sessions_collection):
+        from modules.langchain.http_handlers.conversation import get_session_service
 
-            response = await async_client.post(
-                "/conversation/session",
-                json={"user_id": "test_user", "name": "API Test Session"}
-            )
-
-            assert response.status_code == 200
-            data = response.json()
-            assert data["user_id"] == "test_user"
-            assert data["name"] == "API Test Session"
-            assert "session_id" in data
-
-    @pytest.mark.asyncio
-    async def test_create_session_missing_user_id(self, async_client: AsyncClient):
-        response = await async_client.post(
-            "/conversation/session",
-            json={"name": "No User Session"}
-        )
-
-        assert response.status_code == 422
-
-    @pytest.mark.asyncio
-    async def test_get_session(
-        self,
-        async_client: AsyncClient,
-        sessions_collection,
-    ):
         service = SessionService(collection=sessions_collection)
+        test_app.dependency_overrides[get_session_service] = lambda: service
+
+        try:
+            transport = ASGITransport(app=test_app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.post(
+                    "/conversation/session",
+                    json={"user_id": "test_user", "name": "API Test Session"}
+                )
+
+                assert response.status_code == 200
+                data = response.json()
+                assert data["user_id"] == "test_user"
+                assert data["name"] == "API Test Session"
+                assert "session_id" in data
+        finally:
+            test_app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_create_session_missing_user_id(self, test_app: FastAPI):
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/conversation/session",
+                json={"name": "No User Session"}
+            )
+            assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_get_session(self, test_app: FastAPI, sessions_collection):
+        from modules.langchain.http_handlers.conversation import get_session_service
+
+        service = SessionService(collection=sessions_collection)
+        test_app.dependency_overrides[get_session_service] = lambda: service
+
         created = service.create_session(
             SessionCreate(user_id="test_user", name="Get Test")
         )
 
-        with patch(
-            "modules.langchain.http_handlers.conversation.get_session_service"
-        ) as mock_get_service:
-            mock_get_service.return_value = service
+        try:
+            transport = ASGITransport(app=test_app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.get(f"/conversation/session/{created.session_id}")
 
-            response = await async_client.get(
-                f"/conversation/session/{created.session_id}"
-            )
-
-            assert response.status_code == 200
-            data = response.json()
-            assert data["session_id"] == created.session_id
+                assert response.status_code == 200
+                data = response.json()
+                assert data["session_id"] == created.session_id
+        finally:
+            test_app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_get_session_not_found(
-        self,
-        async_client: AsyncClient,
-        sessions_collection,
-    ):
-        with patch(
-            "modules.langchain.http_handlers.conversation.get_session_service"
-        ) as mock_get_service:
-            service = SessionService(collection=sessions_collection)
-            mock_get_service.return_value = service
+    async def test_get_session_not_found(self, test_app: FastAPI, sessions_collection):
+        from modules.langchain.http_handlers.conversation import get_session_service
 
-            response = await async_client.get("/conversation/session/nonexistent")
-
-            assert response.status_code == 404
-
-    @pytest.mark.asyncio
-    async def test_list_user_sessions(
-        self,
-        async_client: AsyncClient,
-        sessions_collection,
-    ):
         service = SessionService(collection=sessions_collection)
+        test_app.dependency_overrides[get_session_service] = lambda: service
+
+        try:
+            transport = ASGITransport(app=test_app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.get("/conversation/session/nonexistent")
+                assert response.status_code == 404
+        finally:
+            test_app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_list_user_sessions(self, test_app: FastAPI, sessions_collection):
+        from modules.langchain.http_handlers.conversation import get_session_service
+
+        service = SessionService(collection=sessions_collection)
+        test_app.dependency_overrides[get_session_service] = lambda: service
+
         for i in range(3):
             service.create_session(
                 SessionCreate(user_id="list_user", name=f"Session {i}")
             )
 
-        with patch(
-            "modules.langchain.http_handlers.conversation.get_session_service"
-        ) as mock_get_service:
-            mock_get_service.return_value = service
+        try:
+            transport = ASGITransport(app=test_app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.get("/conversation/sessions/user/list_user")
 
-            response = await async_client.get("/conversation/sessions/user/list_user")
-
-            assert response.status_code == 200
-            data = response.json()
-            assert len(data["sessions"]) == 3
+                assert response.status_code == 200
+                data = response.json()
+                assert len(data["sessions"]) == 3
+        finally:
+            test_app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_delete_session(
-        self,
-        async_client: AsyncClient,
-        sessions_collection,
-    ):
+    async def test_delete_session(self, test_app: FastAPI, sessions_collection):
+        from modules.langchain.http_handlers.conversation import get_session_service
+
         service = SessionService(collection=sessions_collection)
+        test_app.dependency_overrides[get_session_service] = lambda: service
+
         created = service.create_session(
             SessionCreate(user_id="test_user", name="To Delete")
         )
 
-        with patch(
-            "modules.langchain.http_handlers.conversation.get_session_service"
-        ) as mock_get_service:
-            mock_get_service.return_value = service
+        try:
+            transport = ASGITransport(app=test_app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.delete(f"/conversation/session/{created.session_id}")
 
-            response = await async_client.delete(
-                f"/conversation/session/{created.session_id}"
-            )
-
-            assert response.status_code == 200
-            assert service.get_session(created.session_id) is None
+                assert response.status_code == 200
+                assert service.get_session(created.session_id) is None
+        finally:
+            test_app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_delete_session_not_found(
-        self,
-        async_client: AsyncClient,
-        sessions_collection,
-    ):
-        with patch(
-            "modules.langchain.http_handlers.conversation.get_session_service"
-        ) as mock_get_service:
-            service = SessionService(collection=sessions_collection)
-            mock_get_service.return_value = service
+    async def test_delete_session_not_found(self, test_app: FastAPI, sessions_collection):
+        from modules.langchain.http_handlers.conversation import get_session_service
 
-            response = await async_client.delete("/conversation/session/nonexistent")
+        service = SessionService(collection=sessions_collection)
+        test_app.dependency_overrides[get_session_service] = lambda: service
 
-            assert response.status_code == 404
+        try:
+            transport = ASGITransport(app=test_app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.delete("/conversation/session/nonexistent")
+                assert response.status_code == 404
+        finally:
+            test_app.dependency_overrides.clear()
 
 
 class TestConversationEndpoint:
     @pytest.mark.asyncio
-    async def test_conversation_empty_message(
-        self,
-        async_client: AsyncClient,
-        sessions_collection,
-    ):
-        with patch(
-            "modules.langchain.http_handlers.conversation.get_session_service"
-        ) as mock_get_service:
-            service = SessionService(collection=sessions_collection)
-            mock_get_service.return_value = service
+    async def test_conversation_empty_message(self, test_app: FastAPI, sessions_collection):
+        from modules.langchain.http_handlers.conversation import get_session_service
 
-            response = await async_client.post(
-                "/conversation",
-                json={
-                    "user_id": "test_user",
-                    "message": "   ",
-                    "stream": False
-                }
-            )
-
-            assert response.status_code == 400
-
-    @pytest.mark.asyncio
-    async def test_conversation_empty_user_id(
-        self,
-        async_client: AsyncClient,
-        sessions_collection,
-    ):
-        with patch(
-            "modules.langchain.http_handlers.conversation.get_session_service"
-        ) as mock_get_service:
-            service = SessionService(collection=sessions_collection)
-            mock_get_service.return_value = service
-
-            response = await async_client.post(
-                "/conversation",
-                json={
-                    "user_id": "   ",
-                    "message": "Hello",
-                    "stream": False
-                }
-            )
-
-            assert response.status_code == 400
-
-    @pytest.mark.asyncio
-    async def test_conversation_session_not_found(
-        self,
-        async_client: AsyncClient,
-        sessions_collection,
-    ):
-        with patch(
-            "modules.langchain.http_handlers.conversation.get_session_service"
-        ) as mock_get_service:
-            service = SessionService(collection=sessions_collection)
-            mock_get_service.return_value = service
-
-            response = await async_client.post(
-                "/conversation",
-                json={
-                    "session_id": "nonexistent",
-                    "user_id": "test_user",
-                    "message": "Hello",
-                    "stream": False
-                }
-            )
-
-            assert response.status_code == 404
-
-    @pytest.mark.asyncio
-    async def test_conversation_non_streaming(
-        self,
-        async_client: AsyncClient,
-        sessions_collection,
-    ):
         service = SessionService(collection=sessions_collection)
+        test_app.dependency_overrides[get_session_service] = lambda: service
 
-        with patch(
-            "modules.langchain.http_handlers.conversation.get_session_service"
-        ) as mock_get_service:
-            mock_get_service.return_value = service
+        try:
+            transport = ASGITransport(app=test_app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.post(
+                    "/conversation",
+                    json={"user_id": "test_user", "message": "   ", "stream": False}
+                )
+                assert response.status_code == 400
+        finally:
+            test_app.dependency_overrides.clear()
 
-            with patch(
-                "modules.langchain.http_handlers.conversation.get_conversation_agent"
-            ) as mock_get_agent:
-                mock_agent = MagicMock()
-                mock_agent.invoke = AsyncMock(return_value="AI Response")
-                mock_get_agent.return_value = mock_agent
+    @pytest.mark.asyncio
+    async def test_conversation_empty_user_id(self, test_app: FastAPI, sessions_collection):
+        from modules.langchain.http_handlers.conversation import get_session_service
 
-                response = await async_client.post(
+        service = SessionService(collection=sessions_collection)
+        test_app.dependency_overrides[get_session_service] = lambda: service
+
+        try:
+            transport = ASGITransport(app=test_app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.post(
+                    "/conversation",
+                    json={"user_id": "   ", "message": "Hello", "stream": False}
+                )
+                assert response.status_code == 400
+        finally:
+            test_app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_conversation_session_not_found(self, test_app: FastAPI, sessions_collection):
+        from modules.langchain.http_handlers.conversation import get_session_service
+
+        service = SessionService(collection=sessions_collection)
+        test_app.dependency_overrides[get_session_service] = lambda: service
+
+        try:
+            transport = ASGITransport(app=test_app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.post(
+                    "/conversation",
+                    json={
+                        "session_id": "nonexistent",
+                        "user_id": "test_user",
+                        "message": "Hello",
+                        "stream": False
+                    }
+                )
+                assert response.status_code == 404
+        finally:
+            test_app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_conversation_non_streaming(self, test_app: FastAPI, sessions_collection):
+        from modules.langchain.http_handlers.conversation import (
+            get_session_service,
+            get_conversation_agent,
+        )
+
+        service = SessionService(collection=sessions_collection)
+        mock_agent = MagicMock()
+        mock_agent.invoke = AsyncMock(return_value="AI Response")
+
+        test_app.dependency_overrides[get_session_service] = lambda: service
+        test_app.dependency_overrides[get_conversation_agent] = lambda: mock_agent
+
+        try:
+            transport = ASGITransport(app=test_app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.post(
                     "/conversation",
                     json={
                         "user_id": "test_user",
@@ -294,3 +264,5 @@ class TestConversationEndpoint:
                 data = response.json()
                 assert data["response"] == "AI Response"
                 assert "session_id" in data
+        finally:
+            test_app.dependency_overrides.clear()
